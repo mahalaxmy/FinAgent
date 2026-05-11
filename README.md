@@ -1,278 +1,513 @@
-# 🏦 FinSight — Annual Report Intelligence Agent
+# FinSight Complete Workflow
 
-An AI agent that reads multiple company annual reports (PDFs), extracts key financial signals, compares companies side by side, detects red flags, and answers analyst-style questions — all from a chat interface.
-
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-green.svg)
-![LlamaIndex](https://img.shields.io/badge/LlamaIndex-0.10+-orange.svg)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-red.svg)
-
----
-
-## ✨ What It Does
-
-| Feature | Description |
-|---------|-------------|
-| 📄 **Multi-Document Upload** | Drop in 2-5 annual reports from Indian companies (Infosys, TCS, HDFC, etc.) |
-| 💬 **Analyst Q&A** | Ask "Which company has the best revenue growth?" or "What are the risk factors mentioned by Infosys?" |
-| 📊 **Structured Extraction** | Auto-extracts revenue, profit, EPS, debt ratio, YoY growth into clean JSON |
-| 🚨 **Red Flag Detection** | Scans for warning language: "litigation", "going concern", "impairment" |
-| 🔍 **Cross-Company Reasoning** | Agent queries multiple indexes, combines evidence, synthesizes answers |
-
----
-
-## 🎯 Why This Stands Out
-
-| Generic Chatbot | **FinSight** |
-|----------------|--------------|
-| Upload one PDF → ask questions → get answers | **Multiple PDFs → structured extraction → cross-document reasoning** |
-| No structure, no comparison | **Domain-aware with typed Pydantic models** |
-| Just retrieval | **Proactive red flag detection (agentic behavior)** |
-
-### The 5 Things That Make It Unique
-
-1. **Multi-document reasoning** — Queries N documents and synthesizes across them
-2. **Structured extraction layer** — Revenue, EPS, profit margin as typed Pydantic fields
-3. **Red flag detection** — Proactive intelligence, not just retrieval
-4. **Real public data** — Uses actual annual reports from NSE/BSE
-5. **Domain specificity** — Understands "going concern", debt ratios, EPS significance
-
----
-
-## 🏗️ Architecture
+## System Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        STREAMLIT UI                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
-│  │ Chat Tab    │  │ Metrics Tab │  │ Red Flags Tab           │ │
-│  │ (Q&A)       │  │ (Comparison)│  │ (Risk Detection)        │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    FINSIGHT AGENT                              │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │              RouterQueryEngine                              │ │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌────────────────────────┐│ │
-│  │  │ Infosys     │ │ TCS         │ │ HDFC                   ││ │
-│  │  │ QueryEngine │ │ QueryEngine │ │ QueryEngine            ││ │
-│  │  │ (Index)     │ │ (Index)     │ │ (Index)                ││ │
-│  │  └─────────────┘ └─────────────┘ └────────────────────────┘│ │
-│  └────────────────────────────────────────────────────────────┘ │
-│  ┌─────────────────────┐  ┌─────────────────────────────────┐ │
-│  │ FinancialExtractor  │  │ RedFlagDetector                 │ │
-│  │ (Pydantic + OpenAI) │  │ (Risk Keyword Scanning)         │ │
-│  └─────────────────────┘  └─────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    DATA LAYER                                    │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │ PDF Reports  │  │ ChromaDB     │  │ Vector Embeddings    │  │
-│  │ (data/)      │──│ (indexes/)   │──│ (text-embedding-3)   │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+
+│                         DATA LAYER                                        │
+
+├─────────────────────────────────────────────────────────────────────────┤
+
+│  data/                indexes/              reports/                      │
+
+│  ├── HDFC_AR.pdf      ├── HDFC_index/     ├── HDFC_analyst_report.pdf    │
+
+│  ├── INFOSYS_AR.pdf   ├── INFOSYS_index/  ├── comparison_report.pdf      │
+
+│  └── TCS_AR.pdf       └── TCS_index/                                     │
+
+└─────────────────────────────────────────────────────────────────────────┘
+
+                                    │
+
+                                    ▼
+
+┌─────────────────────────────────────────────────────────────────────────┐
+
+│                      INGESTION PIPELINE                                 │
+
+│                     (src/ingestion.py)                                    │
+
+├─────────────────────────────────────────────────────────────────────────┤
+
+│  1. PDFProcessor.extract_text()                                         │
+
+│     • PyMuPDF extracts text + metadata from each page                    │
+
+│     • Creates Document objects with company, page_number, source         │
+
+│                                                                         │
+
+│  2. IndexManager.create_index()                                         │
+
+│     • SentenceSplitter chunks documents (512 tokens, 50 overlap)         │
+
+│     • OpenAIEmbedding converts chunks to vectors                        │
+
+│     • ChromaVectorStore persists to disk (one collection/company)        │
+
+└─────────────────────────────────────────────────────────────────────────┘
+
+                                    │
+
+                                    ▼
+
+┌─────────────────────────────────────────────────────────────────────────┐
+
+│                    EXTRACTION LAYER                                     │
+
+│                   (src/extraction.py)                                     │
+
+├─────────────────────────────────────────────────────────────────────────┤
+
+│  extract_metrics_for_all_companies()                                    │
+
+│  └── For each company:                                                  │
+
+│      • Query index: "What is the total revenue and net profit?"          │
+
+│      • Query index: "What is the EPS?"                                   │
+
+│      • Query index: "What is the debt equity ratio?"                     │
+
+│      • Query index: "What is the YoY revenue growth?"                    │
+
+│                                                                         │
+
+│  OpenAI Function Calling (beta.chat.completions.parse)                   │
+
+│  └── Response validated against FinancialMetrics Pydantic model          │
+
+│      • revenue_crore, net_profit_crore, eps, debt_to_equity              │
+
+│      • yoy_revenue_growth_pct, operating_margin_pct, roe                │
+
+└─────────────────────────────────────────────────────────────────────────┘
+
+                                    │
+
+                                    ▼
+
+┌─────────────────────────────────────────────────────────────────────────┐
+
+│                   RED FLAG DETECTION                                      │
+
+│                   (src/redflags.py)                                       │
+
+├─────────────────────────────────────────────────────────────────────────┤
+
+│  scan_all_companies()                                                   │
+
+│  └── For each company index:                                            │
+
+│      • Keyword search: litigation, impairment, going concern, etc.       │
+
+│      • Severity scoring: high/medium/low based on keyword type           │
+
+│      • Context extraction: full sentence + surrounding text               │
+
+│                                                                         │
+
+│  Keywords:                                                              │
+
+│  • HIGH: fraud, bankruptcy, insolvency, material weakness                │
+
+│  • MEDIUM: litigation, impairment, regulatory action, penalty              │
+
+│  • LOW: risk, uncertainty, headwind, volatility                          │
+
+└─────────────────────────────────────────────────────────────────────────┘
+
+                                    │
+
+                                    ▼
+
+┌─────────────────────────────────────────────────────────────────────────┐
+
+│              ⭐ NEW: HEALTH SCORING LAYER                                 │
+
+│                (src/health_scorer.py)                                     │
+
+├─────────────────────────────────────────────────────────────────────────┤
+
+│  get_all_health_scores()                                                │
+
+│  └── For each company:                                                  │
+
+│                                                                         │
+
+│      1. calculate_profitability_score()  [Weight: 35%]                  │
+
+│         • Operating margin >25% = 30pts, >15% = 20pts, etc.               │
+
+│         • ROE >20% = 20pts, >15% = 15pts, etc.                            │
+
+│                                                                         │
+
+│      2. calculate_growth_score()           [Weight: 30%]                  │
+
+│         • YoY growth >50% = 100pts, >30% = 90pts, etc.                  │
+
+│         • Negative growth = penalty                                       │
+
+│                                                                         │
+
+│      3. calculate_debt_safety_score()    [Weight: 20%]                  │
+
+│         • D/E <0.5 = 100pts, <1.0 = 85pts, >3.0 = 25pts                  │
+
+│                                                                         │
+
+│      4. calculate_risk_score()           [Weight: 15%]                  │
+
+│         • High red flag = -25pts, Medium = -10pts, Low = -3pts           │
+
+│                                                                         │
+
+│      5. generate_one_line_reason()                                        │
+
+│         • LLM generates investment rationale                              │
+
+│         • Example: "Strong growth momentum with improving margins"        │
+
+│                                                                         │
+
+│  OUTPUT: CompanyHealthScore object                                       │
+
+│  • overall_score (0-100) + color_code (green/amber/red)                 │
+
+│  • verdict: Strong Buy / Buy / Hold / Caution / Avoid                     │
+
+└─────────────────────────────────────────────────────────────────────────┘
+
+                                    │
+
+                                    ▼
+
+┌─────────────────────────────────────────────────────────────────────────┐
+
+│                 ⭐ NEW: PDF REPORT GENERATION                             │
+
+│                (src/report_generator.py)                                  │
+
+├─────────────────────────────────────────────────────────────────────────┤
+
+│  generate_analyst_report(health_score, metrics, redflags)                  │
+
+│  └── Creates professional PDF with:                                      │
+
+│      • Header: Company name + date                                        │
+
+│      • Scorecard: Overall score + verdict + traffic light                 │
+
+│      • Investment rationale: One-line reason                              │
+
+│      • Dimension breakdown: 4 scores with weights                           │
+
+│      • Metrics table: Revenue, Profit, EPS, Growth, ROE                   │
+
+│      • Risk assessment: Red flag counts + top risks                       │
+
+│      • Disclaimer footer                                                  │
+
+│                                                                         │
+
+│  generate_multi_company_report(health_scores)                             │
+
+│  └── Comparison table with all companies ranked by score                  │
+
+└─────────────────────────────────────────────────────────────────────────┘
+
+                                    │
+
+                                    ▼
+
+┌─────────────────────────────────────────────────────────────────────────┐
+
+│                    AGENT LAYER                                            │
+
+│                    (src/agent.py)                                         │
+
+├─────────────────────────────────────────────────────────────────────────┤
+
+│  FinSightAgent.__init__()                                                │
+
+│  ├── Load indexes from disk (IndexManager)                                │
+
+│  ├── Create QueryEngineTool per company                                  │
+
+│  ├── Build RouterQueryEngine (LLM-based tool selection)                  │
+
+│  └── Set Settings.llm = OpenAILike (OpenRouter-compatible)               │
+
+│                                                                         │
+
+│  ASK FLOW:                                                               │
+
+│  ask_with_reasoning(question)                                            │
+
+│  ├── Step 1: Detect question type (comparison vs single)                  │
+
+│  │                                                                         │
+
+│  ├── SINGLE COMPANY:                                                     │
+
+│  │   RouterQueryEngine.select() → picks best tool                         │
+
+│  │   query_engine.query(question) → retrieves chunks                      │
+
+│  │   LLM synthesizes response                                             │
+
+│  │                                                                         │
+
+│  └── COMPARISON:                                                         │
+
+│      Query ALL company tools → collect responses                          │
+
+│      LLM synthesizes comparison table                                     │
+
+│      Returns ReasonedResponse with full transparency                        │
+
+│                                                                         │
+
+│  REASONEDRESPONSE:                                                       │
+
+│  • reasoning_steps: ["Detected comparison", "Queried INFOSYS", ...]      │
+
+│  • companies_queried: ["INFOSYS", "TCS", "HDFC"]                          │
+
+│  • chunks_retrieved: 12                                                   │
+
+│  • confidence: high/medium/low                                          │
+
+│  • what_was_missing: "No debt data found for TCS"                        │
+
+│  • sources: [{text, page, company}, ...]                                  │
+
+└─────────────────────────────────────────────────────────────────────────┘
+
+                                    │
+
+                                    ▼
+
+┌─────────────────────────────────────────────────────────────────────────┐
+
+│                 STREAMLIT UI LAYER                                      │
+
+│                    (app.py)                                               │
+
+├─────────────────────────────────────────────────────────────────────────┤
+
+│  init_agent()                                                            │
+
+│  ├── Process PDFs → extract text → chunk → embed → index                  │
+
+│  ├── Extract metrics for all companies                                   │
+
+│  ├── Scan for red flags                                                  │
+
+│  └── Calculate health scores                                             │
+
+│                                                                         │
+
+│  4 TABS:                                                                 │
+
+│  ┌─────────────────┬─────────────────┬─────────────────┬─────────────────┐  │
+
+│  │ 🏥 Health        │ 💬 Chat         │ 📊 Metrics       │ 🚨 Red Flags    │  │
+
+│  │   Scores         │                 │                  │                 │  │
+
+│  ├─────────────────┼─────────────────┼─────────────────┼─────────────────┤  │
+
+│  │ Scorecards      │ • Ask questions │ • Comparison    │ • By severity   │  │
+
+│  │ Traffic lights  │ • "Show         │   table         │ • Expandable    │  │
+
+│  │ Verdict badges  │   Reasoning"    │ • Styled        │   details       │  │
+
+│  │ "Generate      │   expander      │   highlights    │ • Company       │  │
+
+│  │  Report" btn    │                 │                 │   filters       │  │
+
+│  │ Download PDFs   │                 │                 │                 │  │
+
+│  └─────────────────┴─────────────────┴─────────────────┴─────────────────┘  │
+
+└─────────────────────────────────────────────────────────────────────────┘
+
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## Complete Data Flow
 
-| Component | Tool | Purpose |
-|-----------|------|---------|
-| **Core Framework** | LlamaIndex | Multi-index management, RouterQueryEngine |
-| **PDF Parsing** | PyMuPDF | Extract text from annual reports |
-| **Vector Store** | ChromaDB | One collection per company |
-| **Embeddings** | OpenAI text-embedding-3-small | Document embeddings |
-| **LLM** | GPT-4o-mini | Chat, extraction, reasoning |
-| **Validation** | Pydantic | Structured output models |
-| **UI** | Streamlit | Chat interface, tables, visualization |
-
----
-
-## 📁 Project Structure
+### Phase 1: Ingestion (One-time per PDF)
 
 ```
-finsight/
-├── data/                           # Annual report PDFs
-│   ├── infosys_ar_2024.pdf
-│   ├── tcs_ar_2024.pdf
-│   └── hdfc_ar_2024.pdf
-├── indexes/                        # Persisted ChromaDB indexes
-│   ├── infosys/
-│   ├── tcs/
-│   └── hdfc/
-├── src/
-│   ├── __init__.py
-│   ├── models.py                   # Pydantic models
-│   ├── ingestion.py                # PDF parsing + indexing
-│   ├── extraction.py               # Financial metrics extraction
-│   ├── redflags.py                 # Risk detection
-│   └── agent.py                    # RouterQueryEngine + tools
-├── app.py                          # Streamlit UI
-├── requirements.txt
-├── .env.example
-└── README.md                       # This file
+
+PDF → PyMuPDF → Text + Metadata → Chunking → Embeddings → ChromaDB
+
+  ↓         ↓           ↓            ↓           ↓            ↓
+
+HDCF.pdf  Page 1-2  HDFC 2024  512-tokens  768-dims   Collection
+
+          Extracted  Company    Chunks      Vectors    "HDFC_index"
+
 ```
 
----
+### Phase 2: Background Processing
 
-## 🚀 Quick Start
-
-### 1. Clone & Install
-
-```bash
-git clone <repo-url>
-cd finsight
-pip install -r requirements.txt
 ```
 
-### 2. Set API Key
+Index Loaded
 
-```bash
-cp .env.example .env
-# Edit .env and add your OpenAI API key
+     │
+
+     ├── Extraction ──► Query Engine ──► LLM ──► FinancialMetrics
+
+     │                    │              │
+
+     │                    └── Q1-Q5 ────┘
+
+     │
+
+     ├── Red Flags ───► Keyword Scan ──► RedFlag objects
+
+     │                    │              │
+
+     │                    └── "fraud" ─► High severity
+
+     │
+
+     └── Health Score ──► Calculation ──► CompanyHealthScore
+
+                          │
+
+                          ├── Profitability: 85/100
+
+                          ├── Growth: 60/100
+
+                          ├── Debt: 90/100
+
+                          ├── Risk: 70/100
+
+                          │
+
+                          Overall: (85×0.35 + 60×0.30 + 90×0.20 + 70×0.15) = 75.3
+
+                          Verdict: BUY
+
+                          Color: 🟢 GREEN
+
 ```
 
-### 3. Add Annual Reports
+### Phase 3: User Interaction
 
-Download annual reports from [NSE India](https://www.nseindia.com) or [BSE](https://www.bseindia.com):
-
-```bash
-# Place PDFs in data/ folder
-mkdir -p data
-cp ~/Downloads/infosys_ar_2024.pdf data/
-cp ~/Downloads/tcs_ar_2024.pdf data/
 ```
 
-### 4. Run
+User: "Compare revenue growth"
 
-```bash
-streamlit run app.py
-```
+      Router
 
----
+         │
 
-## 💡 Example Questions
+         ├── Tool: INFOSYS_analyzer ──► Query: "revenue growth"
 
-### Single Company
-- "What is Infosys's revenue for FY2024?"
-- "What are the main risk factors mentioned by TCS?"
-- "Summarize HDFC's key business highlights"
+         ├── Tool: TCS_analyzer ──────► Query: "revenue growth"
 
-### Cross-Company Comparison
-- "Which company has the best revenue growth?"
-- "Compare debt levels across all three companies"
-- "Which company has the highest profit margin?"
-- "What risks are common across all companies?"
+         └── Tool: HDFC_analyzer ─────► Query: "revenue growth"
 
-### Financial Analysis
-- "What is the EPS trend for each company?"
-- "Compare operating margins"
-- "Which company has the strongest balance sheet?"
+                                       │
 
----
+         LLM Synthesis ◄───────────────┘
 
-## 📊 Pydantic Models
+         │
 
-### FinancialMetrics
-```python
-class FinancialMetrics(BaseModel):
-    company: str
-    fiscal_year: str
-    revenue_crore: Optional[float]
-    net_profit_crore: Optional[float]
-    eps: Optional[float]
-    debt_to_equity: Optional[float]
-    yoy_revenue_growth_pct: Optional[float]
-    operating_margin_pct: Optional[float]
-    roe: Optional[float]
-```
+         Response: "Infosys: 12% | TCS: 8% | HDFC: 15%
 
-### RedFlag
-```python
-class RedFlag(BaseModel):
-    company: str
-    keyword: str
-    sentence: str
-    page_number: Optional[int]
-    severity: Literal["low", "medium", "high"]
-    context: str
+                    Winner: HDFC with 15% YoY growth"
+
+         Reasoning Transparency:
+
+         ├─ Companies Queried: INFOSYS, TCS, HDFC
+
+         ├─ Chunks Retrieved: 8
+
+         ├─ Confidence: HIGH
+
+         ├─ Reasoning Steps:
+
+         │   • Detected comparison question
+
+         │   • Routed to all 3 company tools
+
+         │   • Queried INFOSYS: got 3 chunks
+
+         │   • Queried TCS: got 2 chunks
+
+         │   • Queried HDFC: got 3 chunks
+
+         │   • Synthesized comparison using LLM
+
+         └─ Sources:
+
+             • INFOSYS (p.12): "Revenue grew by 12% to ₹1,45,000 crore..."
+
+             • HDFC (p.8): "Total revenue increased by 15% year-over-year..."
+
 ```
 
 ---
 
-## 🚨 Red Flag Detection
+## Key Technical Decisions
 
-The agent scans for these risk keywords:
+| Decision | Why It Matters |
 
-| Severity | Keywords |
-|----------|----------|
-| **High** | going concern, material weakness, fraud, embezzlement, bankruptcy, insolvency, default, securities violation |
-| **Medium** | litigation, lawsuit, impairment, write-down, restructuring, regulatory action, penalty, investigation |
-| **Low** | risk, uncertainty, challenge, headwind, decline, volatility, competitive pressure |
+|----------|---------------|
 
----
+| **Separate index per company** | Enables clean cross-company comparisons without index pollution |
 
-## 💰 Cost to Run
+| **RouterQueryEngine** | LLM selects the right tool automatically - no hardcoded routing |
 
-| Item | Cost |
-|------|------|
-| OpenAI API (embeddings + chat + extraction) | ~$2-5 total |
-| HuggingFace Spaces deployment | Free |
-| Data (annual reports) | Free from NSE/BSE |
+| **Weighted health scoring** | Standardized methodology (35/30/20/15) mimics real analyst frameworks |
 
-**Total: Under ₹500**
+| **OpenAILike for OpenRouter** | Bypasses model validation while maintaining LlamaIndex compatibility |
+
+| **ReportLab PDFs** | Professional output suitable for client presentations |
 
 ---
 
-## 📝 What I Learned
+## Cost & Performance
 
-> The difference between "chat with a PDF" and a real document intelligence system is **structured extraction**, **validation**, and **cross-document reasoning**. That gap is where the actual engineering lives.
+| Operation | API Calls | Est. Time | Est. Cost |
 
-### Key Technical Insights:
+|-----------|-----------|-----------|-----------|
 
-1. **Multi-index architecture** — Separate vector stores per company enables clean cross-company comparisons
-2. **Pydantic validation** — LLM outputs must be validated before touching the UI
-3. **RouterQueryEngine** — The selector pattern elegantly handles routing to appropriate company indexes
-4. **Structured extraction** — Function calling with response_format ensures reliable JSON output
-5. **Proactive detection** — Scanning for red flags without user prompting is true agentic behavior
+| Index 3 reports (6 pages) | ~12 embeddings | 5 sec | $0.01 |
 
----
+| Extract all metrics | ~15 LLM calls | 15 sec | $0.05 |
 
-## 🌐 Deployment
+| Calculate health scores | 3 LLM calls (reasons) | 3 sec | $0.01 |
 
-### HuggingFace Spaces
+| Generate 3 PDF reports | Local processing | 2 sec | $0.00 |
 
-1. Create a new Space (Streamlit SDK)
-2. Upload all files
-3. Add `OPENAI_API_KEY` to Space secrets
-4. Include sample PDFs or provide upload interface
+| **Total First Run** | | **25 sec** | **~$0.07** |
 
-```bash
-# Create HuggingFace repo
-huggingface-cli repo create finsight --type space --sdk streamlit
-```
+| Subsequent queries | 1-3 LLM calls | 2-5 sec | $0.01/query |
 
 ---
 
-## 🔗 Links
+## What Makes This Production-Ready
 
-- **Live Demo**: [HuggingFace Spaces](#)
-- **LinkedIn Post**: [#AIEngineering #RAG #LlamaIndex](#)
-- **Video Demo**: [60-second walkthrough](#)
+1. **Explainability** — Every answer shows its reasoning
 
----
+2. **Structured Outputs** — Pydantic validation ensures consistency
 
-## 📜 License
+3. **Visual Impact** — Traffic light scorecards, professional PDFs
 
-MIT License — Built for educational and demonstration purposes.
+4. **Cost Efficiency** — OpenRouter support, local vector storage
 
----
-
-**Built with ❤️ by [Your Name]**
-
-*Impressed AI engineers and recruiters at: CRED, Razorpay, Zerodha, Groww, Nura Analytics, Hyperbolic, Deloitte, PwC, EY*
+5. **Extensibility** — Modular architecture, easy to add new scoring dimensions
